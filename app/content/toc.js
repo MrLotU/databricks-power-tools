@@ -158,8 +158,164 @@ function findHeader(ex1) {
     return [null, 0];
 }
 
+function swapStar() {
+    readFromStore("stars", {stars: [], map: {}}, stars => {
+        const nbId = document.location.hash.split('/')[1]
+        const title = document.getElementById('nbTitle').innerText
+        const isStarred = stars.stars.indexOf(nbId) >= 0
+
+        if (isStarred === true) {
+            var x = {...stars.map}
+            x[nbId] = null
+            stars.stars.splice(stars.stars.indexOf(nbId))
+            saveToStore('stars', { stars: [...stars.stars], map: x})
+        } else {
+            var x = {...stars.map}
+            x[nbId] = title
+            saveToStore('stars', {stars: [...stars.stars, nbId], map: x})
+        }
+
+        starTime()
+    })
+}
+
+function starsOnIndex() {
+    if (document.location.hash !== '') return
+    const _node = document.querySelector('.homeview-version');
+    if (!_node) {
+        setTimeout(starsOnIndex, 500)
+        return
+    }
+    readFromStore("stars", {stars: [], map: {}}, stars => {
+        const node = _node.parentNode.parentNode.parentNode
+        if (!node) return
+        const title = node.querySelector('.homeview-card-title')
+        title.innerHTML = 'Starred';
+        const section = node.querySelector('.homeview-section')
+        
+        const rSection = document.createElement('div')
+        rSection.classList.add('homeview-recent-section')
+        if (stars.stars.length > 0) {
+            stars.stars.forEach((s) => {
+                const d = document.createElement('div')
+                d.classList.add('recent-item-container')
+                const a = document.createElement('a')
+                a.classList.add('recent-item')
+                a.href = '#notebook/' + s
+                a.innerHTML = `<i class="fa fa-file-text-o"></i>\n${stars.map[s]}`
+                d.appendChild(a)
+                rSection.appendChild(d)
+            })
+
+            section.childNodes.forEach((x) => section.removeChild(x))
+            section.appendChild(rSection)
+        } else {
+            section.childNodes[0].innerHTML = "No starred items"
+        }
+    })
+}
+
+function starTime() {
+    if (document.location.hash.indexOf('#notebook') === -1) {
+        starsOnIndex()
+        return
+    }
+
+    const x = document.querySelector('.tb-title-wrapper')
+    if (!x) return
+
+    readFromStore("stars", {stars: []}, _stars => {
+        var stars = _stars.stars
+        var star = x.querySelector('.nb-star')
+
+        const nbId = document.location.hash.split('/')[1]
+        const isStarred = stars.indexOf(nbId) >= 0
+
+        if (!star) {
+            const span = document.createElement('span')
+            span.style.color = '#f9d71c'
+            span.style.paddingLeft = '5px'
+            const image = document.createElement('i')
+            image.classList.add('fa', isStarred ? 'fa-star' : 'fa-star-o', 'nb-star')
+            image.setAttribute('aria-hidden', 'true')
+            span.appendChild(image)
+            x.appendChild(span)
+
+            star = image
+        }
+
+        star.classList.remove('fa-star', 'fa-star-o')
+        star.classList.add(isStarred ? 'fa-star' : 'fa-star-o')
+        star.onclick = (e) => {
+            swapStar()
+        }
+    });
+}
+
+var lastName = undefined;
+var map = {};
+var sections = []
+
+function addToMap(ex1) {
+    var name = lastName
+    var h = findHeader(ex1)[0]
+    if (h) {
+        if (name) {
+            let l = map[name]
+            let _a = [...l.subs]
+            _a.pop()
+            map[name] = { ac: l.ac, subs: _a, head: l.head}
+        }
+
+        name = h.innerText
+        sections.push(name)
+        lastName = name
+        const a = h.querySelector('a')
+        map[name] = { ac: (a && a.pathname === '/auto-collapse'), subs: [], head: ex1 }
+    } else if (lastName) {
+        let l = map[name]
+        map[name] = { ac: l.ac, subs: [...l.subs, ex1], head: l.head }
+    }
+}
+
+function autoCollapse() {
+    if (sections.length !== 0) return
+    const spin = document.querySelector('.load-spinner')
+    if (spin && getComputedStyle(spin).display !== 'none') {
+        return
+    }
+    [...document.querySelectorAll('.heading-command-wrapper, .notebook-command-title input')].forEach(addToMap)
+
+    sections.forEach(s => {
+        const meta = map[s];
+        if (!meta.ac) return
+        meta.subs.forEach((sub) => {
+            sub.classList.add('hidden-by-heading')
+        })
+        var c = meta.head.querySelector('.command')
+        if (c) {
+            var t = meta.head.querySelector('.heading-toggler')
+            t.style.display = 'none'
+            const d = document.createElement('div')
+            d.classList.add('heading-hidden-children-info')
+            const da = document.createElement('a')
+            da.innerText = '↳ cells automatically hidden'
+            da.onclick = (ev) => {
+                meta.subs.forEach((sub) => {
+                    sub.classList.remove('hidden-by-heading')
+                })
+                c.removeChild(d)
+                t.style.display = null
+            }
+            d.appendChild(da)
+            c.appendChild(d)
+        }
+    })
+}
 
 function locationHashChanged(isActiveToc, mainDiv, orderedList, scrollOnHover) {
+
+    starTime();
 
     function refresh() {
 
@@ -224,11 +380,13 @@ function locationHashChanged(isActiveToc, mainDiv, orderedList, scrollOnHover) {
         try {
             _levels = levels(headers)
         } catch {}
-
-        _levels
-            .forEach(liOrArray => {
-                setupList(liOrArray, fakeOrderedList)
-            });
+        
+        if (_levels || headers)
+            if (!_levels) _levels = headers
+            _levels
+                .forEach(liOrArray => {
+                    setupList(liOrArray, fakeOrderedList)
+                });
 
         // only update when changed :-)
         if (orderedList.innerHTML !== fakeOrderedList.innerHTML) {
@@ -237,6 +395,8 @@ function locationHashChanged(isActiveToc, mainDiv, orderedList, scrollOnHover) {
         }
 
         mainDiv.classList.toggle("empty", orderedList.childElementCount == 0);
+
+        autoCollapse();
     }
 
 
