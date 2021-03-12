@@ -98,6 +98,10 @@ addStyle(`
     margin-right: 124px;
 }
 
+.lesswidesearch {
+    width: calc(100% - 64px) !important
+}
+
 `);
 
 function last(arr) {
@@ -158,21 +162,82 @@ function findHeader(ex1) {
     return [null, 0];
 }
 
+var userFilterEnabled = false;
+var setObserver = false;
+
+function addSearchObserver() {
+    const d = document.querySelector('.searchpanel.ui-resizable')
+    if (!d) {
+        setTimeout(addSearchObserver, 500)
+        return
+    }
+
+    if (setObserver) return
+    setObserver = true
+
+    addUserSearchFilter()
+    addActualFilter()
+}
+
+function addActualFilter() {
+    const searchBar = document.querySelector('div.newsearch')
+    if (!searchBar) return
+    const searchList = searchBar.parentElement.querySelector('ul[aria-live=polite]')
+
+    const cb = (list, observer) => {
+        if (!userFilterEnabled) return
+        const email = document.querySelector('#user-menu .header').title
+        list.forEach((item) => {
+            item.addedNodes.forEach((node) => {
+                const a = node.querySelector('a')
+                if (!a) return
+                if (a.title.indexOf(email) < 0) {
+                    node.style.display = 'none'
+                }
+            })
+        })
+    }
+
+    const observer = new MutationObserver(cb)
+    observer.observe(searchList, {childList: true })
+}
+
+function addUserSearchFilter() {
+    // Check search open
+    const searchBar = document.querySelector('div.newsearch')
+    if (!searchBar) return
+    const input = searchBar.querySelector('input.searchbox')
+    const searchList = searchBar.parentElement.querySelector('ul[aria-live=polite]')
+    // Add button
+    if (input.classList.contains('lesswidesearch')) return
+    input.classList.add('lesswidesearch')
+    const i = document.createElement('i')
+    i.classList.add('fa', userFilterEnabled ? 'fa-user' : 'fa-user-o')
+    i.setAttribute('aria-hidden', 'true')
+    searchBar.insertBefore(i, searchBar.children[1])
+    // Filter results
+    i.onclick = (e) => {
+        i.classList.remove('fa-user-o', 'fa-user')
+        userFilterEnabled = !userFilterEnabled
+        i.classList.add(userFilterEnabled ? 'fa-user' : 'fa-user-o')
+    }
+}
+
 function swapStar() {
-    readFromStore("stars", {stars: [], map: {}}, stars => {
+    readFromStore("stars", { stars: [], map: {} }, stars => {
         const nbId = document.location.hash.split('/')[1]
         const title = document.getElementById('nbTitle').innerText
         const isStarred = stars.stars.indexOf(nbId) >= 0
 
         if (isStarred === true) {
-            var x = {...stars.map}
+            var x = { ...stars.map }
             x[nbId] = null
             stars.stars.splice(stars.stars.indexOf(nbId))
-            saveToStore('stars', { stars: [...stars.stars], map: x})
+            saveToStore('stars', { stars: [...stars.stars], map: x })
         } else {
-            var x = {...stars.map}
+            var x = { ...stars.map }
             x[nbId] = title
-            saveToStore('stars', {stars: [...stars.stars, nbId], map: x})
+            saveToStore('stars', { stars: [...stars.stars, nbId], map: x })
         }
 
         starTime()
@@ -186,13 +251,13 @@ function starsOnIndex() {
         setTimeout(starsOnIndex, 500)
         return
     }
-    readFromStore("stars", {stars: [], map: {}}, stars => {
+    readFromStore("stars", { stars: [], map: {} }, stars => {
         const node = _node.parentNode.parentNode.parentNode
         if (!node) return
         const title = node.querySelector('.homeview-card-title')
         title.innerHTML = 'Starred';
         const section = node.querySelector('.homeview-section')
-        
+
         const rSection = document.createElement('div')
         rSection.classList.add('homeview-recent-section')
         if (stars.stars.length > 0) {
@@ -224,7 +289,7 @@ function starTime() {
     const x = document.querySelector('.tb-title-wrapper')
     if (!x) return
 
-    readFromStore("stars", {stars: []}, _stars => {
+    readFromStore("stars", { stars: [] }, _stars => {
         var stars = _stars.stars
         var star = x.querySelector('.nb-star')
 
@@ -264,7 +329,7 @@ function addToMap(ex1) {
             let l = map[name]
             let _a = [...l.subs]
             _a.pop()
-            map[name] = { ac: l.ac, subs: _a, head: l.head}
+            map[name] = { ac: l.ac, subs: _a, head: l.head }
         }
 
         name = h.innerText
@@ -316,6 +381,8 @@ function autoCollapse() {
 function locationHashChanged(isActiveToc, mainDiv, orderedList, scrollOnHover) {
 
     starTime();
+
+    addSearchObserver();
 
     function refresh() {
 
@@ -379,14 +446,14 @@ function locationHashChanged(isActiveToc, mainDiv, orderedList, scrollOnHover) {
         var _levels = headers
         try {
             _levels = levels(headers)
-        } catch {}
-        
+        } catch { }
+
         if (_levels || headers)
             if (!_levels) _levels = headers
-            _levels
-                .forEach(liOrArray => {
-                    setupList(liOrArray, fakeOrderedList)
-                });
+        _levels
+            .forEach(liOrArray => {
+                setupList(liOrArray, fakeOrderedList)
+            });
 
         // only update when changed :-)
         if (orderedList.innerHTML !== fakeOrderedList.innerHTML) {
